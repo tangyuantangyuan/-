@@ -1,0 +1,33 @@
+/* One interface. Classic dimensions; Futura headings and a readable sans body. */
+:root{--font-heading:JournalFutura,JournalSourceSans,sans-serif;--font-body:Helvetica,"Helvetica Neue",Arial,JournalSourceSans,sans-serif;font-family:var(--font-body);font-size:16px}
+button,input,select,textarea{font-family:var(--font-body);font-size:14px;line-height:1.5}
+h1,h2,h3{font-family:var(--font-heading);font-weight:400}
+.top-actions button{font-family:var(--font-heading);font-size:16px}.topbar{box-shadow:none}
+/* Top actions remain plain text. */
+.top-actions button:disabled{opacity:.35;cursor:default}.sticker-hit.locked{cursor:default}.sticker-hit.locked.selected{outline-style:dashed}
+.top-actions .history-action{display:inline-flex;align-items:center;justify-content:center;min-width:36px;padding:8px}.history-action svg{display:block;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+#libraryBtn::before,#settingsBtn::before,#modeBtn::before{content:none}
+.sidebar,.tools{border-radius:0;box-shadow:none;border:0;background:transparent}
+.sidebar{border-right:1px solid var(--ui-line);padding-right:18px}.tools{border-left:1px solid var(--ui-line);padding-left:18px}
+.panel-heading{padding-bottom:14px;border-bottom:1px solid var(--ui-border);margin-bottom:18px}
+.panel-heading h2{font-family:var(--font-heading);font-size:19px;line-height:1.4}.panel-heading button{font-size:14px}
+.cover-tab,.sheet-heading{font-family:var(--font-heading);font-size:15px;line-height:1.5}
+.cover-tab.active{font-weight:400}.sheet-card{border:0;border-bottom:1px solid var(--ui-line);border-radius:0;box-shadow:none;background:transparent;padding:14px 0}
+.sheet-card.active{border-bottom-color:var(--ui-text)}.sheet-heading{color:var(--ui-secondary)}.sheet-actions button{font-size:15px;min-width:30px}
+.face-tabs button{padding:10px 4px;font-family:var(--font-body);line-height:1.5}.face-tabs strong{font-family:var(--font-body);font-size:13px;font-weight:400;line-height:1.5}.face-tabs small{font-family:var(--font-body);font-size:11px;line-height:1.5;color:var(--ui-secondary)}
+.linked-label{font-size:13px;line-height:1.5;color:var(--ui-secondary)}
+.tool-card{border:0;border-top:1px solid var(--ui-line);border-radius:0;box-shadow:none;background:transparent;padding:16px 0}
+.tool-card h3{font-family:var(--font-heading);font-size:16px;line-height:1.5;margin-bottom:14px}.tool-card button{font-size:14px;line-height:1.5}
+.studio-field,.range-heading,.range-heading output,.field>span,.dialog-body>label{font-size:14px;line-height:1.6}.range-heading{gap:10px}.range-field{margin:16px 0}
+#settingsForm>label,#settingsForm>.field>span{font-family:var(--font-heading);font-size:16px}
+.book-caption h1{font-family:var(--font-heading);font-size:16px;letter-spacing:.02em}
+dialog{border-radius:7px;box-shadow:0 16px 44px #19191924}dialog::backdrop{background:#19191960}
+.dialog-title h2{font-family:var(--font-heading);font-size:25px;line-height:1.3}
+.dialog-body input[type=text],#titleInput,.studio-field input[type=text],textarea,select{border-radius:3px}
+.select-trigger{font-family:var(--font-body);font-size:14px;border-radius:6px}.select-list{border-radius:7px;box-shadow:0 5px 17px #19191919,0 0 0 1px var(--ui-line)}.select-option{font-family:var(--font-body);font-size:14px;border-radius:4px}
+.palette button{border-radius:2px}.choice-grid button{font-size:14px}.choice-grid strong{font-family:var(--font-heading);font-size:16px}
+.library-actions button,.library-batch button{font-size:14px}.library-open h3{font-family:var(--font-heading);font-size:16px;line-height:1.5}.library-card small{font-family:var(--font-body);font-size:13px;color:var(--ui-secondary);line-height:1.6}
+.library-cover{filter:drop-shadow(2px 3px 1px #19191918) drop-shadow(0 5px 7px #1919190c)}.book-menu summary{font-size:16px}.book-menu[open]{border:1px solid var(--ui-line);border-radius:4px;box-shadow:0 4px 12px #19191912}.book-menu button{font-size:14px}
+.offline-details{font-size:13px}.offline-details summary,#libraryFilters>.studio-field>span,label.studio-field:has(#categoryInput){font-family:var(--font-heading);font-size:16px}.muted,.hint{font-size:13px;line-height:1.6}.empty-library{font-size:15px}
+@media(max-width:1100px){.editing .sidebar,.editing .tools{background:var(--ui-surface);border:1px solid var(--ui-line);border-radius:5px;box-shadow:0 8px 26px #19191924}}
+@media(max-width:540px){.top-actions button{font-size:16px;padding:8px 6px}.dialog-title h2{font-size:23px}.book-caption h1{font-size:16px}}
