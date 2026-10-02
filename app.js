@@ -237,8 +237,8 @@ function makeStack(surface, side, interactive = false) {
   if (interactive) { stack.classList.add('selectable'); if (selectedId === surface.id && !selectedStickerId) stack.classList.add('selected'); stack.addEventListener('click', () => { if (busy) return; selectedId = surface.id; selectedStickerId = null; render(); }); }
   return stack;
 }
-function makeMetalRing(binding) {
-  const ring=node('i',`metal-ring coil-ring${binding==='binder'?' binder-ring':''}`);
+function makeMetalRing(binding, rear = false) {
+  const ring=node('i',`ring-segment ${rear?'rear-ring':'metal-ring'} coil-ring${binding==='binder'?' binder-ring':''}`);
   ring.setAttribute('aria-hidden','true');return ring;
 }
 function addBinding(root, at, binding = book.binding, size = book.sizePreset, thumbnail = false) {
@@ -246,9 +246,14 @@ function addBinding(root, at, binding = book.binding, size = book.sizePreset, th
   const config = bindingGeometry(binding,size), coils = node('div', `coil-binding ${binding === 'binder' ? 'binder-binding' : 'single-coil-binding'}${thumbnail ? ' thumbnail-binding' : ''}`), left = (100 - config.gap) / 2 * (1 - config.inset / 100);
   coils.style.left = `${left}%`; coils.style.width = `${100 - left * 2}%`;
   if(thumbnail){const leaf=(100-config.gap)/2;coils.style.left=`${(left-(100+config.gap)/2)/leaf*100}%`;coils.style.width=`${(100-left*2)/leaf*100}%`;}
-  if(binding==='binder')coils.append(node('div','binder-rail'));
-  for (const y of holePositions(config)) { const ring = makeMetalRing(binding);ring.style.top = `${y}%`;coils.append(ring); }
-  root.append(coils);
+  const rear=node('div',`${coils.className} binding-back`);rear.style.left=coils.style.left;rear.style.width=coils.style.width;
+  coils.classList.add('binding-front');
+  if(binding==='binder')rear.append(node('div','binder-rail'));
+  for (const y of holePositions(config)) {
+    const ring = makeMetalRing(binding),back=makeMetalRing(binding,true);
+    ring.style.top=back.style.top=`${y}%`;coils.append(ring);rear.append(back);
+  }
+  root.append(rear,coils);
 }
 function shapeEdgePoints(shape,side) {
   const data=shapeAssets.get(shape.resource),layout=shapeLayout(shape,side),outer=[],inner=[];
@@ -445,7 +450,7 @@ function lockUI() { $('#sidebar').inert = busy; $('#tools').inert = busy; $('#mo
 function beginTurn(dir) {
   const next = position + dir; if (busy || next < -1 || next > book.sheets.length + 1) return null;
   busy = true; lockUI(); const old = position, from = M.view(book,old), to = M.view(book,next), side = dir > 0 ? 'right' : 'left', stationary = dir > 0 ? 'left' : 'right';
-  const base = buildView(next,false); $('.coil-binding, .spine',base)?.remove(); $(`.leaf-stack.${stationary}`,base)?.remove(); if (from[stationary]) base.append(makeStack(from[stationary],stationary));
+  const base = buildView(next,false); base.querySelectorAll('.coil-binding, .spine').forEach(el=>el.remove()); $(`.leaf-stack.${stationary}`,base)?.remove(); if (from[stationary]) base.append(makeStack(from[stationary],stationary));
   $book.replaceChildren(base); $book.classList.remove('closed-front','closed-back');
   const leaf = node('div',`turn-sheet ${dir > 0 ? 'forward' : 'backward'}`), source = M.locate(book,from[side].id);
   const flexible = Boolean(source.sheet) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -468,7 +473,10 @@ function beginTurn(dir) {
     }
     panel.append(front,back); leaf.append(panel); panels.push(panel); faces.push(front,back);
   }
-  base.append(leaf); if (book.binding !== 'bound') addBinding(base,next);
+  // Flatten only at the hardware boundary. The turning leaf retains its own
+  // 3D context, while the near arc stays in front and the far arc behind it.
+  if(book.binding!=='bound'){const stage=node('div','ring-turn-stage');stage.append(leaf);base.append(stage);addBinding(base,next);}
+  else base.append(leaf);
   const metrics = layoutMetrics();
   const context = { dir, old, next, progress:0, leaf, shades, faces, panels, width:metrics.leaf, dragWidth:metrics.leaf*(source.sheet?.shape?shapeLayout(source.sheet.shape,source.side).width/100:1), gap:metrics.gap }; paintTurn(context,0); return context;
 }
