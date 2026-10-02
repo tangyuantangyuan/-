@@ -9,6 +9,24 @@
     helvetica:'JournalHelveticaDisplay, JournalSourceSans, sans-serif'
   });
   const fontLabels={sourceSans:'Sans · 思源黑体',serif:'Serif · Baskerville / 思源宋体',helvetica:'Helvetica · Condensed Black'};
+  const latinFonts={system:'system-ui, sans-serif',sans:'JournalHelvetica, Helvetica, Arial, sans-serif',futura:'JournalFutura, sans-serif',baskerville:'JournalBaskerville, Georgia, serif',typewriter:'JournalTypewriter, "Courier New", monospace'};
+  const chineseFonts={system:'"PingFang SC", "Microsoft YaHei", system-ui, sans-serif',typewriter:'JournalTypewriter, "PingFang SC", serif',serif:'JournalSourceSerif, "Songti SC", SimSun, serif',sans:'JournalSourceSans, "PingFang SC", sans-serif'};
+  const latinLabels={system:'System',sans:'Sans · Helvetica',futura:'Futura',baskerville:'Baskerville',typewriter:'Typewriter'};
+  const chineseLabels={system:'System · 系统',typewriter:'Typewriter · 打字机',serif:'Serif · 宋体',sans:'Sans · 黑体'};
+  function fontPair(s) {
+    const legacy={futura:['futura','system'],typewriter:['typewriter','typewriter'],sans:['system','system'],sourceSans:['sans','sans'],serif:['baskerville','serif'],helvetica:['sans','sans']}[s.font]||['futura','system'];
+    return {latin:Object.hasOwn(latinFonts,s.fontLatin)?s.fontLatin:legacy[0],chinese:Object.hasOwn(chineseFonts,s.fontChinese)?s.fontChinese:legacy[1]};
+  }
+  function textRuns(s) {
+    const pair=fontPair(s), runs=[];
+    for(const char of s.text){
+      const code=char.codePointAt(0), chinese=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(char)||(code>=0x3000&&code<=0x303f)||(code>=0xff00&&code<=0xffef);
+      // A dedicated symbol fallback avoids blank punctuation in display fonts.
+      const family=chinese?chineseFonts[pair.chinese]:code>=0x2000&&code<=0x2bff?'system-ui, sans-serif':latinFonts[pair.latin];
+      const last=runs.at(-1);if(last?.family===family)last.text+=char;else runs.push({family,text:char});
+    }
+    return runs;
+  }
   function resources(value, result = new Set()) {
     if (!value || typeof value !== 'object') return result;
     for (const [key, item] of Object.entries(value)) {
@@ -41,6 +59,8 @@
         crop(s);
         if (![s.x,s.y,s.rotation,s.zIndex].every(Number.isFinite) || !number(s.width,1,1000)) fail();
         if (s.kind === 'text') {
+          if(s.fontLatin!==undefined && !Object.hasOwn(latinFonts,s.fontLatin))fail();
+          if(s.fontChinese!==undefined && !Object.hasOwn(chineseFonts,s.fontChinese))fail();
           if (!str(s.text,20000) || !Object.hasOwn(fonts,s.font) || !number(s.height,1,500) || !number(s.fontSize,.5,40) || !number(s.lineHeight,.5,5) || !number(s.letterSpacing,-.2,1) || !/^#[\da-f]{6}$/i.test(s.color) || !['left','center','right'].includes(s.align) || ![400,700].includes(s.weight)) fail();
         } else if (s.kind || !str(s.resource,150)) fail();
       }
@@ -84,6 +104,6 @@
       if(action==='centerY') positions[i].y=(area.top+area.bottom)/2;
     }); return positions;
   }
-  const api={sizes,fonts,fontLabels,resources,remap,validateBook,bounds,align};
+  const api={sizes,fonts,fontLabels,latinFonts,chineseFonts,latinLabels,chineseLabels,fontPair,textRuns,resources,remap,validateBook,bounds,align};
   root.JournalStudio=api; if(typeof module!=='undefined') module.exports=api;
 })(globalThis);

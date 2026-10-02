@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#191919">
+  <meta name="color-scheme" content="light dark">
   <title>Notebook</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
@@ -14,16 +15,17 @@
 <body>
   <header class="topbar"><div class="top-actions">
     <span id="saveStatus" class="visually-hidden" aria-live="polite">Loading…</span>
-    <button id="libraryBtn">Library</button><button id="pagesToggle" class="tablet-control">Pages</button><button id="toolsToggle" class="tablet-control">Tools</button>
+    <button id="libraryBtn">Library</button><button id="pagesToggle" class="tablet-control" aria-controls="sidebar" aria-expanded="false">Pages</button><button id="toolsToggle" class="tablet-control" aria-controls="tools" aria-expanded="false">Tools</button>
     <button id="undoBtn" class="history-action" aria-label="Undo" title="Undo (Ctrl / ⌘ Z)" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5 4 10l5 5M4 10h10a5 5 0 0 1 0 10h-2"/></svg></button><button id="redoBtn" class="history-action" aria-label="Redo" title="Redo (Ctrl / ⌘ Shift Z)" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 5 5 5-5 5m5-5H10a5 5 0 0 0 0 10h2"/></svg></button>
     <button id="settingsBtn" class="quiet">Settings</button><button id="modeBtn" class="primary">Done</button>
   </div></header>
+  <button id="panelBackdrop" class="panel-backdrop" aria-label="Close editing panel" tabindex="-1" hidden></button>
   <main id="app" class="app">
-    <aside id="sidebar" class="sidebar" hidden><div class="panel-heading"><h2>Pages</h2><button id="addPageBtn" title="Add a two-sided sheet">+ Sheet</button></div><div id="pageList" class="page-list"></div></aside>
+    <aside id="sidebar" class="sidebar" hidden><div class="panel-heading"><h2>Pages</h2><button id="addPageBtn" title="Add a two-sided sheet">+ Sheet</button><button id="pagesClose" class="panel-close" aria-label="Close Pages">×</button></div><div id="pageList" class="page-list"></div></aside>
     <section class="workspace"><div class="stage">
       <button id="prevBtn" class="nav prev" aria-label="Previous sheet">‹</button><div id="book" class="book"></div><button id="nextBtn" class="nav next" aria-label="Next sheet">›</button>
     </div><div class="book-caption"><h1 id="bookTitle" role="button" tabindex="0" aria-label="Edit notebook" title="Edit notebook">My journal</h1></div></section>
-    <aside id="tools" class="tools" hidden><div class="panel-heading"><h2 id="toolTitle">Selection</h2></div><div id="toolBody"></div></aside>
+    <aside id="tools" class="tools" hidden><div class="panel-heading"><h2 id="toolTitle">Selection</h2><button id="toolsClose" class="panel-close" aria-label="Close Tools">×</button></div><div id="toolBody"></div></aside>
   </main>
   <dialog id="settingsDialog"><form method="dialog" id="settingsForm" class="dialog-body">
     <div class="dialog-title"><h2>Notebook</h2><button id="settingsCloseBtn" type="button" class="icon-btn" aria-label="Close">×</button></div>

@@ -55,7 +55,7 @@ async function flushSave() {
     while (savedRevision < saveRevision) {
       const revision = saveRevision; book.updatedAt = Date.now();
       const tx = db.transaction('books', 'readwrite'), done = txDone(tx);
-      tx.objectStore('books').put(M.clone(book)); await done; savedRevision = revision;
+      tx.objectStore('books').put(M.clone(book)); await done; savedRevision = revision;bookUnstored=false;
     }
     $('#saveStatus').textContent = 'Saved on this device';
   } catch (error) { console.error(error); $('#saveStatus').textContent = 'Save failed'; toast('Could not save. Please check available device storage.'); }
@@ -128,6 +128,8 @@ function navigateToSurface(id) { const loc = M.locate(book, id); if (loc) { sele
 
 function render() {
   document.documentElement.dataset.theme = book.uiTheme === 'dark' ? 'dark' : 'light';
+  const themeMeta=$('meta[name="theme-color"]');if(themeMeta)themeMeta.setAttribute('content',book.uiTheme==='dark'?'#191919':'#F0F0EB');
+  if(!editing)setEditorPanel(null);
   document.body.classList.toggle('reading', !editing);
   $('#app').classList.toggle('editing', editing); $('#sidebar').hidden = !editing; $('#tools').hidden = !editing;
   $('#modeBtn').textContent = editing ? 'Done' : 'Edit';
@@ -169,7 +171,8 @@ function appendImage(parent, image, side, shape, surfaceSide) {
 function appendSticker(parent, sticker, offset = 0) {
   const el = node('div', 'sticker-art'); el.style.left = `${sticker.x - offset}%`; el.style.top = `${sticker.y}%`; el.style.width = `${sticker.width}%`; el.style.transform = `translate(-50%,-50%) rotate(${sticker.rotation}deg)`;
   if (sticker.kind === 'text') {
-    el.classList.add('text-art'); el.style.height = `${sticker.height}%`; el.textContent = sticker.text;
+    el.classList.add('text-art'); el.style.height = `${sticker.height}%`;
+    for(const run of JournalStudio.textRuns(sticker)){const span=node('span','',run.text);span.style.fontFamily=run.family;el.append(span);}
     el.style.fontFamily = JournalStudio.fonts[sticker.font]; el.style.fontSize = `${sticker.fontSize}cqw`;
     el.style.fontWeight = sticker.weight; el.style.color = sticker.color; el.style.textAlign = sticker.align;
     el.style.lineHeight = sticker.lineHeight; el.style.letterSpacing = `${sticker.letterSpacing}em`; parent.append(el); return;

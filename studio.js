@@ -250,7 +250,9 @@ function renderStudioTools() {
   if(s?.kind==='text' && !objectLocked(ref) && !s.groupId) {
     const panel=section('Text'), field=node('textarea');field.value=s.text;field.maxLength=20000;field.rows=4;field.setAttribute('aria-label','Text');
     field.addEventListener('input',()=>{s.text=field.value;save(field);renderBook();});field.addEventListener('blur',()=>historyKey=null);panel.append(field);
-    selectControl(panel,'Font',[['futura','Futura'],['sourceSans',Studio.fontLabels.sourceSans],['serif',Studio.fontLabels.serif],['typewriter','Typewriter'],['helvetica',Studio.fontLabels.helvetica],['sans','System Chinese']],s.font,value=>{s.font=value;save();renderBook();});
+    const pair=Studio.fontPair(s);
+    selectControl(panel,'Western font',Object.entries(Studio.latinLabels),pair.latin,value=>{s.fontLatin=value;save();renderBook();});
+    selectControl(panel,'Chinese font',Object.entries(Studio.chineseLabels),pair.chinese,value=>{s.fontChinese=value;save();renderBook();});
     palette(panel,s.color,v=>{s.color=color(v);save();renderBook();});panel.append(button('Pick from image',()=>openColorPicker(v=>{s.color=v;save();render();})));
     range(panel,'Type size',s.fontSize*10,10,160,v=>s.fontSize=v/10);
     range(panel,'Box height',s.height,5,100,v=>{s.height=v;normalizeSticker(ref);},'%');
@@ -325,6 +327,10 @@ let pickerRequest=0;
 async function showPickerImage(id) {
   const current=++pickerRequest;try {const image=await decode(assetURL(id));if(current!==pickerRequest)return;const canvas=$('#pickerCanvas'),scale=Math.min(1,1200/image.naturalWidth,1200/image.naturalHeight);canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle=color(selected()?.surface.background||book.paperColor);ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);}catch{toast('Image unavailable.');}
 }
+function setEditorPanel(panel) {
+  for(const name of ['pages','tools']){const open=panel===name;document.body.classList.toggle(`show-${name}`,open);$('#'+name+'Toggle').setAttribute('aria-expanded',String(open));}
+  $('#panelBackdrop').hidden=!panel;closeSelect();
+}
 function installStudio() {
   if(studioInstalled)return;studioInstalled=true;
   document.addEventListener('pointerdown',e=>{if(activeSelect&&!activeSelect.control.contains(e.target))closeSelect();});
@@ -339,8 +345,8 @@ function installStudio() {
   $('#batchRestore').onclick=()=>void studioAction(()=>changeLibrarySelection(true));
   $('#batchDelete').onclick=()=>{if(libraryFilter==='trash')confirmSelectedDeletion();else void studioAction(()=>changeLibrarySelection());};
   $('#batchExport').onclick=()=>void studioAction(async()=>{await persistBook();await exportNotebooks((await allBooks()).filter(b=>librarySelected.has(b.id)));});
-  $('#libraryClose').onclick=()=>{if(!bookUnstored&&!book.deletedAt)$('#libraryDialog').close();};
-  $('#libraryDialog').addEventListener('cancel',e=>{if(bookUnstored||book.deletedAt)e.preventDefault();});
+  $('#libraryClose').onclick=()=>{if(book.deletedAt)blankCurrentNotebook();$('#libraryDialog').close();render();};
+  $('#libraryDialog').addEventListener('cancel',()=>{if(book.deletedAt){blankCurrentNotebook();render();}});
   $('#newBook').onclick=()=>void studioAction(async()=>{const fresh=M.createBook();fresh.title='Untitled';fresh.uiTheme=book.uiTheme;await writeBooks([fresh]);await loadNotebook(fresh,true);});
   $('#exportLibrary').onclick=()=>void studioAction(async()=>{await persistBook();await exportNotebooks((await allBooks()).filter(b=>!b.deletedAt));});
   $('#importBackup').onclick=()=>{$('#backupInput').value='';$('#backupInput').click();};
@@ -351,7 +357,12 @@ function installStudio() {
   $('#dangerWord').oninput=e=>$('#dangerConfirm').disabled=e.target.value!=='DELETE';
   $('#cropDialog').addEventListener('close',()=>{cropState=null;$('#cropCanvas').width=1;$('#cropCanvas').height=1;$('#cropCanvas').onpointermove=null;});
   $('#pickerDialog').addEventListener('close',()=>{pickerRequest++;pickerState=null;$('#pickerCanvas').width=1;$('#pickerCanvas').height=1;});
-  $('#pagesToggle').onclick=()=>document.body.classList.toggle('show-pages');$('#toolsToggle').onclick=()=>document.body.classList.toggle('show-tools');
+  for(const name of ['pages','tools'])$('#'+name+'Toggle').onclick=()=>setEditorPanel(document.body.classList.contains('show-'+name)?null:name);
+  $('#pagesClose').onclick=$('#toolsClose').onclick=$('#panelBackdrop').onclick=()=>setEditorPanel(null);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('dialog[open]'))setEditorPanel(null);});
+  const oldSelectSurface=selectSurface;selectSurface=id=>{oldSelectSurface(id);if(!busy)setEditorPanel(null);};
+  const updateViewport=()=>{const v=globalThis.visualViewport;document.documentElement.style.setProperty?.('--visible-height',`${v?.height||globalThis.innerHeight||800}px`);document.documentElement.style.setProperty?.('--visible-top',`${v?.offsetTop||0}px`);};
+  globalThis.visualViewport?.addEventListener('resize',updateViewport);globalThis.visualViewport?.addEventListener('scroll',updateViewport);globalThis.addEventListener?.('resize',updateViewport);updateViewport();
   $('#cropUpload').onclick=()=>{if(pendingImport)void openCrop({},null,true);};
   $('#cropClose').onclick=()=>$('#cropDialog').close();$('#cropApply').onclick=()=>void applyCrop();
   $('#cropReset').onclick=()=>{cropState.rect={x:0,y:0,w:1,h:1};$('#cropRatio').value='free';paintCrop();};
