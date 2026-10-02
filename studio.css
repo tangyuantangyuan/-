@@ -1,6 +1,6 @@
 @import url('journal-fonts.css');
-@font-face{font-family:JournalFutura;src:url('./Futura.otf') format('opentype');font-weight:400;font-display:swap}
-@font-face{font-family:JournalTypewriter;src:url('./typewriter.woff') format('woff');font-weight:400;font-display:swap}
+@font-face{font-family:JournalFutura;src:url('././Futura.otf') format('opentype');font-weight:400;font-display:swap}
+@font-face{font-family:JournalTypewriter;src:url('././typewriter.woff') format('woff');font-weight:400;font-display:swap}
 :root{font-family:JournalFutura,'PingFang SC','Microsoft YaHei',system-ui,sans-serif}
 button,input,select,textarea{font:inherit}button.primary,h1,h2,h3,strong{font-weight:400}
 button{min-height:36px}textarea,select{background:var(--ui-bg);color:var(--ui-text);border:0;border-radius:3px;padding:9px}select{max-width:100%}textarea{resize:vertical;width:100%;line-height:1.6;min-height:100px}

@@ -90,15 +90,27 @@ async function prepareShape(resource) {
   const draw = () => ctx.drawImage(image, bounds.left, bounds.top, bounds.width, bounds.height, 0, 0, canvas.width, canvas.height);
   draw(); const mask = await canvasURL(canvas);
   const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  // Apply alpha once via the sheet mask, rather than accidentally squaring it.
+  const hitAlpha = Uint8Array.from({length:canvas.width*canvas.height},(_,i)=>pixels.data[i*4+3]);
+  const silhouette=ctx.createImageData(canvas.width,canvas.height);
+  for(let i=3;i<pixels.data.length;i+=4)silhouette.data[i]=pixels.data[i]?255:0;
+  ctx.putImageData(silhouette,0,0);const outline=await canvasURL(canvas);
+  ctx.clearRect(0,0,canvas.width,canvas.height);ctx.save();ctx.translate(canvas.width,0);ctx.scale(-1,1);const shapeCanvas=document.createElement('canvas');shapeCanvas.width=canvas.width;shapeCanvas.height=canvas.height;shapeCanvas.getContext('2d').putImageData(silhouette,0,0);ctx.drawImage(shapeCanvas,0,0);ctx.restore();const mirroredOutline=await canvasURL(canvas);
+  // Paper uses the original alpha; objects use the fully opaque silhouette.
   for (let i = 3; i < pixels.data.length; i += 4) pixels.data[i] = 255;
   ctx.putImageData(pixels, 0, 0); const opaque = await canvasURL(canvas);
   ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.translate(canvas.width, 0); ctx.scale(-1, 1); draw();
   const mirroredMask = await canvasURL(canvas);
-  const result = { mask, opaque, mirroredMask, ratio: bounds.width / bounds.height };
+  const result = { mask, opaque, mirroredMask, outline, mirroredOutline, hitAlpha, pixelWidth:canvas.width, pixelHeight:canvas.height, ratio: bounds.width / bounds.height };
   shapeAssets.set(resource, result); return result;
 }
 
+function isReadOnlySurface(surface) {const loc=surface&&M.locate(book,surface.id),shape=loc?.sheet?.shape;return !!(shape&&loc.side!==shape.sourceSide&&shape.sideMode==='show-through');}
+function canImportMode(loc,mode,at=position) {
+  if(!loc||loc.inside||isReadOnlySurface(loc.surface))return false;
+  if(mode==='alpha-shaped')return !!loc.sheet&&(!loc.sheet.shape||loc.sheet.shape.sourceSide===loc.side);
+  if(mode.startsWith('spread')){const v=M.view(book,at);return !v.closed&&!!M.locate(book,v.left.id)?.sheet&&!!M.locate(book,v.right.id)?.sheet&&!isReadOnlySurface(v.left)&&!isReadOnlySurface(v.right);}
+  return ['sticker','single-cover','single-contain'].includes(mode);
+}
 function currentView() { return M.view(book, position); }
 function selected() { return selectedId && M.locate(book, selectedId); }
 function defaultSelection() { const v = currentView(); selectedId = (v.closed === 'back' ? v.left : v.right)?.id || v.left?.id || null; }
@@ -107,14 +119,18 @@ function caption(where) { if (!where) return 'Selection'; if (where.cover) retur
 function surfaceLabel(p) { const loc = M.locate(book, p.id); if (loc?.sheet?.shape) return 'Shaped paper'; if (p.image) return MODE_LABELS[p.image.mode] || 'Image'; if (p.stickers.length) return 'Objects'; return 'Blank'; }
 function stickerRefs(at = position) {
   const v = M.view(book, at), refs = [];
-  for (const [side, surface] of [['left', v.left], ['right', v.right]]) if (surface) for (const sticker of surface.stickers) refs.push({ sticker, collection: surface.stickers, surface, offset: side === 'right' ? 100 : 0, side });
+  for (const [side, surface] of [['left', v.left], ['right', v.right]]) if (surface&&!isReadOnlySurface(surface)) for (const sticker of surface.stickers) refs.push({ sticker, collection: surface.stickers, surface, offset: side === 'right' ? 100 : 0, side });
   const spread = M.getSpread(book, at); if (spread) for (const sticker of spread.stickers) refs.push({ sticker, collection: spread.stickers, spread, offset: 0 });
   return refs;
 }
 function selectedSticker() { return stickerRefs().find(r => r.sticker.id === selectedStickerId); }
 function normalizeSticker(ref) {
+  if(isReadOnlySurface(ref.surface))return;
   if(ref.sticker.groupId){normalizeGroup(groupMembers(ref));return;}
   if (currentView().closed) return;
+  const limits=currentView(), box=objectBounds(ref);
+  if(isReadOnlySurface(limits.left))ref.sticker.x+=Math.max(0,100+box.halfX-box.x);
+  if(isReadOnlySurface(limits.right))ref.sticker.x-=Math.max(0,box.x+box.halfX-100);
   const s = ref.sticker, x = s.x + ref.offset, ratio = (assets.get(s.resource)?.width || 1) / (assets.get(s.resource)?.height || 1);
   const half = JournalStudio.bounds(s, ref.offset, SIZES[book.sizePreset], ratio).halfX;
   if (x - half < 100 && x + half > 100) {
@@ -150,10 +166,10 @@ function shapeLayout(shape, side) {
   const positionY = clamp(shape.positionY ?? 50, 0, 100);
   return { width, height, left: side === 'back' ? 100 - width : 0, top: (100 - height) * positionY / 100, position: `${side === 'back' ? 100 : 0}% ${positionY}%` };
 }
-function setShapeMask(el, sheet, side) {
+function setShapeMask(el, sheet, side, solid=false) {
   const shape = sheet?.shape; if (!shape) return;
   const data = shapeAssets.get(shape.resource), { width, height, position } = shapeLayout(shape, side);
-  const url = side === shape.sourceSide ? data?.mask || assetURL(shape.resource) : data?.mirroredMask || assetURL(shape.resource);
+  const url = side === shape.sourceSide ? (solid?data?.outline:data?.mask)||assetURL(shape.resource) : (solid?data?.mirroredOutline:data?.mirroredMask)||assetURL(shape.resource);
   el.style.maskImage = `url("${url}")`; el.style.webkitMaskImage = `url("${url}")`;
   el.style.maskSize = `${width}% ${height}%`; el.style.webkitMaskSize = `${width}% ${height}%`;
   el.style.maskPosition = position; el.style.webkitMaskPosition = position; el.style.maskRepeat = 'no-repeat'; el.style.webkitMaskRepeat = 'no-repeat';
@@ -165,7 +181,7 @@ function appendImage(parent, image, side, shape, surfaceSide) {
   img.src = isShapeSource ? shapeAssets.get(image.resource)?.opaque || assetURL(image.resource) : assetURL(image.resource);
   img.style.objectFit = image.mode.endsWith('cover') ? 'cover' : 'contain'; img.style.objectPosition = `${image.positionX ?? 50}% ${image.positionY ?? 50}%`;
   if (image.mode.startsWith('spread')) { img.style.width = '200%'; img.style.left = (image.sourceHalf ?? (side === 'right' ? 1 : 0)) ? '-100%' : '0'; }
-  if (isShapeSource) { const layout = shapeLayout(shape, surfaceSide); img.style.width = `${layout.width}%`; img.style.height = `${layout.height}%`; img.style.left = `${layout.left}%`; img.style.top = `${layout.top}%`; if (surfaceSide !== shape.sourceSide) img.style.transform = 'scaleX(-1)'; }
+  if (shape && !image.mode.startsWith('spread')) { const layout = shapeLayout(shape, surfaceSide); img.style.width = `${layout.width}%`; img.style.height = `${layout.height}%`; img.style.left = `${layout.left}%`; img.style.top = `${layout.top}%`; if (isShapeSource&&surfaceSide !== shape.sourceSide) img.style.transform = 'scaleX(-1)'; }
   viewport.append(img); parent.append(viewport);
 }
 function appendSticker(parent, sticker, offset = 0) {
@@ -181,13 +197,23 @@ function appendSticker(parent, sticker, offset = 0) {
 }
 function makeFace(surface, side) {
   const loc = M.locate(book, surface.id), face = node('div', `paper-face${loc.cover ? ' cover-face' : ''}${loc.sheet?.shape ? ' shaped-face' : ''}`);
-  face.dataset.surfaceId = surface.id; face.style.background = color(surface.background || book.paperColor); setShapeMask(face, loc.sheet, loc.side);
-  const spread = M.getSpread(book, loc.position), spreadImage = !loc.cover && spread?.image;
-  appendImage(face, spreadImage || surface.image, side, loc.sheet?.shape, loc.side);
-  const stickers = surface.stickers.map(s => ({ s, offset: 0 }));
-  if (!loc.cover && spread) stickers.push(...spread.stickers.map(s => ({ s, offset: side === 'right' ? 100 : 0 })));
-  stickers.sort((a, b) => a.s.zIndex - b.s.zIndex).forEach(x => appendSticker(face, x.s, x.offset));
-  if (book.binding === 'bound') face.append(node('div', `paper-shading ${side}`)); else applyHoles(face, side);
+  face.dataset.surfaceId = surface.id;
+  const reverse=isReadOnlySurface(surface), source=reverse?loc.sheet[loc.sheet.shape.sourceSide]:surface, sourceLoc=M.locate(book,source.id), sourceSide=reverse?(sourceLoc.side==='front'?'right':'left'):side;
+  let paper=face,art=face;
+  if(loc.sheet?.shape){
+    face.style.background='transparent';const content=node('div','shape-content');if(reverse){content.classList.add('show-through');content.style.transform='scaleX(-1)';}
+    paper=node('div','shape-paper-layer');art=node('div','shape-art-layer');
+    if(reverse)setShapeMask(content,loc.sheet,sourceLoc.side);
+    else {setShapeMask(paper,loc.sheet,sourceLoc.side);setShapeMask(art,loc.sheet,sourceLoc.side,true);}
+    content.append(paper,art);face.append(content);
+  }
+  paper.style.background = color(source.background || book.paperColor);
+  const spread = M.getSpread(book, sourceLoc.position), spreadImage = !sourceLoc.cover && spread?.image;
+  appendImage(paper, spreadImage || source.image, sourceSide, loc.sheet?.shape, sourceLoc.side);
+  const stickers = source.stickers.map(s => ({ s, offset: 0 }));
+  if (!sourceLoc.cover && spread) stickers.push(...spread.stickers.map(s => ({ s, offset: sourceSide === 'right' ? 100 : 0 })));
+  stickers.sort((a, b) => a.s.zIndex - b.s.zIndex).forEach(x => appendSticker(art, x.s, x.offset));
+  if (book.binding === 'bound') paper.append(node('div', `paper-shading ${sourceSide}`)); else applyHoles(face, side);
   return face;
 }
 function applyHoles(face, side, binding = book.binding, size = book.sizePreset) {
@@ -224,12 +250,32 @@ function addBinding(root, at, binding = book.binding, size = book.sizePreset, th
   for (const y of holePositions(config)) { const ring = makeMetalRing(binding);ring.style.top = `${y}%`;coils.append(ring); }
   root.append(coils);
 }
+function shapeEdgePoints(shape,side) {
+  const data=shapeAssets.get(shape.resource),layout=shapeLayout(shape,side),outer=[],inner=[];
+  const mirrored=side!==shape.sourceSide,rows=96,band=Math.min(layout.width,12);
+  for(let row=0;row<=rows;row++) {
+    let edge=side==='back'?0:1;
+    if(data?.hitAlpha){const y=Math.min(data.pixelHeight-1,Math.floor(row/rows*data.pixelHeight)),fromLeft=shape.sourceSide==='back';let x=fromLeft?0:data.pixelWidth-1;while(x>=0&&x<data.pixelWidth&&!data.hitAlpha[y*data.pixelWidth+x])x+=fromLeft?1:-1;edge=fromLeft?(x>=data.pixelWidth?1:x/data.pixelWidth):(x<0?0:(x+1)/data.pixelWidth);if(mirrored)edge=1-edge;}
+    const x=layout.left+edge*layout.width,y=layout.top+row/rows*layout.height;
+    outer.push(`${x}% ${y}%`);inner.unshift(`${side==='back'?Math.min(layout.left+layout.width,x+band):Math.max(layout.left,x-band)}% ${y}%`);
+  }
+  return `polygon(${outer.concat(inner).join(',')})`;
+}
+function shapeHit(loc,x,y) {
+  const shape=loc.sheet.shape,layout=shapeLayout(shape,loc.side),data=shapeAssets.get(shape.resource);
+  let u=(x-layout.left)/layout.width,v=(y-layout.top)/layout.height;
+  if(u<0||u>=1||v<0||v>=1)return false;
+  if(loc.side!==shape.sourceSide)u=1-u;
+  return !data?.hitAlpha||!!data.hitAlpha[Math.min(data.pixelHeight-1,Math.floor(v*data.pixelHeight))*data.pixelWidth+Math.min(data.pixelWidth-1,Math.floor(u*data.pixelWidth))];
+}
 function buildView(at, interactive = false) {
   const root = node('div', 'spread-board'), v = M.view(book, at);
   for (const side of ['left', 'right']) if (v[side]) root.append(makeStack(v[side], side, interactive)); addBinding(root, at);
   if (interactive) addStickerHits(root, at);
   else if (!busy) for (const [side, dir] of [['left', -1], ['right', 1]]) if (v[side] && (dir > 0 ? at <= book.sheets.length : at >= 0)) {
-    const edge = node('div', `page-edge ${side}`); edge.setAttribute('aria-hidden', 'true'); edge.addEventListener('pointerdown', e => startGesture(e, dir)); root.append(edge);
+    const edge = node('div', `page-edge ${side}`),loc=M.locate(book,v[side].id); edge.setAttribute('aria-hidden', 'true');
+    if(loc.sheet?.shape){edge.classList.add('shaped-edge');edge.style.width='var(--leaf-width)';edge.style.clipPath=shapeEdgePoints(loc.sheet.shape,loc.side);setShapeMask(edge,loc.sheet,loc.side,true);const l=shapeLayout(loc.sheet.shape,loc.side);edge.style.backgroundSize=`${l.width}% ${l.height}%`;edge.style.backgroundPosition=l.position;edge.style.backgroundRepeat='no-repeat';}
+    edge.addEventListener('pointerdown', e => {if(loc.sheet?.shape){const r=edge.getBoundingClientRect();if(!shapeHit(loc,(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100))return;}startGesture(e, dir);}); root.append(edge);
   }
   return root;
 }
@@ -238,6 +284,7 @@ function xToPixel(x, m) { return x / 100 * m.leaf + (x > 100 ? m.gap : 0); }
 function pixelToX(x, m) { return x <= m.leaf ? x / m.leaf * 100 : x >= m.leaf + m.gap ? 100 + (x - m.leaf - m.gap) / m.leaf * 100 : 100; }
 function addStickerHits(root, at) {
   const layer = node('div', 'sticker-hit-layer'); root.append(layer); const gap = book.binding !== 'bound' ? bindingGeometry().gap : 0, fraction = (100 - gap) / 200;
+  const view=M.view(book,at);if(isReadOnlySurface(view.left))layer.style.clipPath=`inset(0 0 0 ${(100+gap)/2}%)`;if(isReadOnlySurface(view.right))layer.style.clipPath=`inset(0 ${(100+gap)/2}% 0 0)`;if(isReadOnlySurface(view.left)&&isReadOnlySurface(view.right))return;
   for (const ref of stickerRefs(at).sort((a,b) => a.sticker.zIndex - b.sticker.zIndex)) {
     const s = ref.sticker, hit = node('div', 'sticker-hit' + (s.id === selectedStickerId ? ' selected' : '')), x = s.x + ref.offset;
     hit.dataset.stickerId = s.id; hit.style.left = `${x * fraction + (x > 100 ? gap : 0)}%`; hit.style.top = `${s.y}%`; hit.style.width = `${s.width * fraction}%`; hit.style.aspectRatio = (assets.get(s.resource)?.width || 1) / (assets.get(s.resource)?.height || 1); hit.style.transform = `translate(-50%,-50%) rotate(${s.rotation}deg)`;
@@ -286,8 +333,15 @@ function range(parent, label, value, min, max, update, suffix = '') {
   input.addEventListener('input', () => { output.textContent = `${input.value}${suffix}`; update(Number(input.value)); save(input); renderBook(); }); wrap.append(heading,input); parent.append(wrap);
   input.addEventListener('change', () => { historyKey=null;renderList(); renderTools(); });
 }
+function paperSideOptions(loc) {
+  const panel=section('Paper sides'),row=node('div','segmented');
+  for(const [value,label] of [['independent','Independent'],['show-through','Show-through']])row.append(button(label,()=>{loc.sheet.shape.sideMode=value;selectedStickerId=null;save();render();},(loc.sheet.shape.sideMode||'independent')===value?'active':''));
+  panel.append(row);return panel;
+}
 function renderTools() {
   const body = $('#toolBody'); body.replaceChildren(); const loc = selected(); $('#toolTitle').textContent = caption(loc); if (!loc) return;
+  if(loc.sheet?.shape)body.append(paperSideOptions(loc));
+  if(isReadOnlySurface(loc.surface)){const panel=section('Reverse · read only');panel.append(button('Edit other side',()=>selectSurface(loc.sheet[loc.sheet.shape.sourceSide].id)));body.append(panel);return;}
   const p = loc.surface;
   if (loc.inside) { const intro = section('Inside cover'); intro.append(button('+ Sheet', addSheet, 'wide')); body.append(intro); }
   else {
@@ -355,15 +409,15 @@ function startStickerDrag(e, ref) {
   $book.addEventListener('pointermove',move); $book.addEventListener('pointerup',end); $book.addEventListener('pointercancel',end);$book.addEventListener('lostpointercapture',end); renderBook();
 }
 
-function chooseImage() { if (busy || !selected() || selected().inside) return; $('#imageInput').value = ''; $('#imageInput').click(); }
+function chooseImage() { if (busy || !selected() || selected().inside || isReadOnlySurface(selected().surface)) return; $('#imageInput').value = ''; $('#imageInput').click(); }
 async function acceptFile(file) {
-  if (!file?.type.startsWith('image/')) { toast('Choose a PNG, JPEG, WebP or other supported image.'); return; } const loc = selected(); if (!loc || loc.inside) return;
+  if (!file?.type.startsWith('image/')) { toast('Choose a PNG, JPEG, WebP or other supported image.'); return; } const loc = selected(); if (!loc || loc.inside || isReadOnlySurface(loc.surface)) return;
   pendingImport = { file, targetId: loc.surface.id, at: position }; $('#importFileName').textContent = file.name;
-  document.querySelectorAll('[data-import]').forEach(btn => { const mode = btn.dataset.import, v = currentView(), bothInterior = !v.closed && M.locate(book,v.left.id)?.sheet && M.locate(book,v.right.id)?.sheet; btn.disabled = mode.startsWith('spread') ? !bothInterior : mode === 'alpha-shaped' ? !loc.sheet : false; });
+  document.querySelectorAll('[data-import]').forEach(btn => {btn.disabled=!canImportMode(loc,btn.dataset.import,position);});
   $('#importNote').textContent = loc.cover ? '' : ''; $('#importDialog').showModal();
 }
 async function importImage(mode) {
-  if (!pendingImport || busy) return; const pending = pendingImport, loc = M.locate(book,pending.targetId); if (!loc) return;
+  if (!pendingImport || busy) return; const pending = pendingImport, loc = M.locate(book,pending.targetId); if (!canImportMode(loc,mode,pending.at)) return;
   if (!mode.startsWith('spread') && mode !== 'sticker' && M.getSpread(book,pending.at)?.image && !confirm('Replace the shared spread image with this page image?')) return;
   $('#importDialog').close(); busy = true; lockUI();
   try {
@@ -371,10 +425,11 @@ async function importImage(mode) {
     const resource = await storeAsset(pending.file), p = loc.surface;
     if (mode === 'sticker') {
       const s = { id: M.id(), resource, x: 50, y: 50, width: 38, rotation: 0, zIndex: Math.max(0,...stickerRefs().map(r=>r.sticker.zIndex))+1 };
+      if(loc.sheet?.shape){const layout=shapeLayout(loc.sheet.shape,loc.side);s.x=layout.left+layout.width/2;s.y=layout.top+layout.height/2;s.width=Math.min(s.width,layout.width*.6);}
       p.stickers.push(s); selectedStickerId = s.id;
     } else if (mode.startsWith('spread')) { const spread = M.getSpread(book,pending.at,true); spread.image = { resource, mode, positionX:50, positionY:50 }; selectedStickerId = null; }
     else {
-      if (mode === 'alpha-shaped') { await prepareShape(resource); loc.sheet.shape = { resource, scale:100, sourceSide:loc.side }; }
+      if (mode === 'alpha-shaped') { await prepareShape(resource); loc.sheet.shape = { resource, scale:100, sourceSide:loc.side, sideMode:loc.sheet.shape?.sideMode||'independent' }; }
       const spread = M.getSpread(book,pending.at); if (spread) spread.image = null; p.image = { resource, mode, positionX:50, positionY:50 }; selectedStickerId = null;
     }
     if (originalResource) {
@@ -408,13 +463,14 @@ function beginTurn(dir) {
     }
     for (const [face, surface, shadeSide] of [[front,from[side],side],[back,to[stationary],stationary]]) {
       const shade = node('div','turn-shade'), loc = M.locate(book,surface.id); setShapeMask(shade,loc.sheet,loc.side);
+      if(loc.sheet?.shape){const l=shapeLayout(loc.sheet.shape,loc.side);shade.style.backgroundSize=`${l.width}% ${l.height}%`;shade.style.backgroundPosition=l.position;shade.style.backgroundRepeat='no-repeat';}
       if (book.binding !== 'bound') applyHoles(shade,shadeSide); face.append(shade); shades.push(shade);
     }
     panel.append(front,back); leaf.append(panel); panels.push(panel); faces.push(front,back);
   }
   base.append(leaf); if (book.binding !== 'bound') addBinding(base,next);
   const metrics = layoutMetrics();
-  const context = { dir, old, next, progress:0, leaf, shades, faces, panels, width:metrics.leaf, gap:metrics.gap }; paintTurn(context,0); return context;
+  const context = { dir, old, next, progress:0, leaf, shades, faces, panels, width:metrics.leaf, dragWidth:metrics.leaf*(source.sheet?.shape?shapeLayout(source.sheet.shape,source.side).width/100:1), gap:metrics.gap }; paintTurn(context,0); return context;
 }
 function pageBend(width, direction, progress, count) {
   const curve = progress <= 0 || progress >= 1 ? 0 : Math.sin(Math.PI * progress);
@@ -439,7 +495,7 @@ function paintTurn(context, progress) {
     panel.style.transform = `translateX(${bend.x}px) translateZ(${bend.z}px) rotateY(${bend.angle}deg)`;
   });
   if (context.panels.length === 1) for (const face of context.faces) face.style.filter = `drop-shadow(${context.dir * curve * -10}px ${curve * 7}px ${curve * 12}px rgba(25,25,25,${curve * .16}))`;
-  for (const shade of context.shades) { shade.style.opacity = String(curve * .22); shade.style.background = `linear-gradient(${context.dir > 0 ? 90 : 270}deg,transparent 25%,#191919 100%)`; }
+  for (const shade of context.shades) { shade.style.opacity = String(curve * .22); shade.style.backgroundImage = `linear-gradient(${context.dir > 0 ? 90 : 270}deg,transparent 25%,#191919 100%)`; }
 }
 function settleTurn(context, commit) {
   const start = performance.now(), from = context.progress, target = commit ? 1 : 0, reduced = matchMedia('(prefers-reduced-motion: reduce)').matches, duration = reduced ? 90 : Math.max(180,560 * Math.abs(target-from));
@@ -448,7 +504,7 @@ function settleTurn(context, commit) {
 }
 function turn(dir) { const context = beginTurn(dir); if (context) settleTurn(context,true); }
 function startGesture(e, dir) {
-  if (editing || e.button !== 0) return; e.preventDefault(); const startX = e.clientX, startY = e.clientY, width = layoutMetrics().leaf, context = beginTurn(dir); if (!context) return;
+  if (editing || e.button !== 0) return; e.preventDefault(); const startX = e.clientX, startY = e.clientY, context = beginTurn(dir); if (!context) return; const width=context.dragWidth;
   $book.setPointerCapture(e.pointerId); let lastX = startX, moved = false;
   const move = ev => { lastX = ev.clientX; moved ||= Math.hypot(lastX-startX,ev.clientY-startY) > 7; paintTurn(context,clamp((startX-lastX)*dir / (width*1.6),0,1)); };
   const end = ev => { $book.removeEventListener('pointermove',move); $book.removeEventListener('pointerup',end); $book.removeEventListener('pointercancel',end); settleTurn(context,ev.type !== 'pointercancel' && (!moved || context.progress > .22)); };

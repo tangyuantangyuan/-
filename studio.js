@@ -215,8 +215,9 @@ async function importNotebooks(file) {
   libraryFilter='all';await openLibrary();toast('Imported as new notebooks.');
 }
 function addText() {
-  const loc=selected();if(!loc)return;
+  const loc=selected();if(!loc||isReadOnlySurface(loc.surface))return;
   const s={id:M.id(),kind:'text',text:'A little note…',font:'futura',fontSize:5,height:30,width:65,x:50,y:50,rotation:0,zIndex:Math.max(0,...stickerRefs().map(r=>r.sticker.zIndex))+1,color:'#262625',weight:400,lineHeight:1.5,letterSpacing:0,align:'left'};
+  if(loc.sheet?.shape){const layout=shapeLayout(loc.sheet.shape,loc.side);s.x=layout.left+layout.width/2;s.y=layout.top+layout.height/2;s.width=Math.min(s.width,layout.width*.8);s.height=Math.min(s.height,layout.height*.8);}
   loc.surface.stickers.push(s);selectedStickerId=s.id;selectedObjects.clear();save();render();
 }
 function objectBounds(ref) { const a=assets.get(ref.sticker.resource);return Studio.bounds(ref.sticker,ref.offset,SIZES[book.sizePreset],a?a.width/a.height:1); }
@@ -231,7 +232,7 @@ function alignObjects(action) {
   units.forEach((unit,i)=>{unit.forEach(ref=>{ref.sticker.x+=output[i].x-boxes[i].x;ref.sticker.y+=output[i].y-boxes[i].y;});if(unit[0].sticker.groupId)normalizeGroup(unit);else normalizeSticker(unit[0]);});save();render();
 }
 function renderStudioTools() {
-  const root=$('#toolBody'), loc=selected();if(!loc)return;
+  const root=$('#toolBody'), loc=selected();if(!loc||isReadOnlySurface(loc.surface))return;
   const visible=new Set(stickerRefs().map(r=>r.sticker.id));for(const id of selectedObjects)if(!visible.has(id))selectedObjects.delete(id);
   const add=section('Objects'); add.append(button('+ Text',addText));
   add.append(button(multiple?'Done selecting':'Select multiple',()=>{multiple=!multiple;selectedObjects.clear();if(multiple&&selectedStickerId)selectedObjects.add(selectedStickerId);render();})); root.append(add);

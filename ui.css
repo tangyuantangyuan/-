@@ -1,4 +1,5 @@
 /* One interface. Classic dimensions; Futura headings and a readable sans body. */
+.shape-content,.shape-paper-layer,.shape-art-layer{position:absolute;inset:0;pointer-events:none}.shape-art-layer{container-type:inline-size}.shape-content{transform-origin:center}
 :root{--font-heading:JournalFutura,JournalSourceSans,sans-serif;--font-body:JournalHelvetica,Helvetica,"Helvetica Neue",Arial,JournalSourceSans,sans-serif;font-family:var(--font-body);font-size:16px}
 button,input,select,textarea{font-family:var(--font-body);font-size:14px;line-height:1.5}
 h1,h2,h3{font-family:var(--font-heading);font-weight:400}

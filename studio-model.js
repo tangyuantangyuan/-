@@ -70,7 +70,7 @@
     for (const c of ['covers','insides']) for (const side of ['front','back']) surface(book[c]?.[side]);
     for (const sheet of book.sheets) {
       identity(sheet); surface(sheet.front); surface(sheet.back);
-      if (sheet.shape && (!str(sheet.shape.resource,150) || !number(sheet.shape.scale,10,100) || !['front','back'].includes(sheet.shape.sourceSide) || (sheet.shape.positionY !== undefined && !number(sheet.shape.positionY,0,100)))) fail();
+      if (sheet.shape && (!str(sheet.shape.resource,150) || !number(sheet.shape.scale,10,100) || !['front','back'].includes(sheet.shape.sourceSide) || (sheet.shape.sideMode !== undefined && !['independent','show-through'].includes(sheet.shape.sideMode)) || (sheet.shape.positionY !== undefined && !number(sheet.shape.positionY,0,100)))) fail();
     }
     for (const spread of book.spreads) { identity(spread); if (!ids.has(spread.leftId) || !ids.has(spread.rightId)) fail(); image(spread.image); stickers(spread.stickers); }
     if (book.category !== undefined && !str(book.category,100)) fail();

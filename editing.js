@@ -48,11 +48,14 @@ function activeObjectRefs() {
   const ids=new Set(picked.flatMap(r=>groupMembers(r,refs).map(x=>x.sticker.id)));
   return refs.filter(r=>ids.has(r.sticker.id));
 }
-function objectLocked(ref) { return groupMembers(ref).some(r=>r.sticker.locked); }
+function objectLocked(ref) { return groupMembers(ref).some(r=>r.sticker.locked||isReadOnlySurface(r.surface)); }
 // Keep group members on the same surface/spread so page turns cannot split a group.
 function normalizeGroup(refs) {
   if(!refs.length || currentView().closed)return;
-  const boxes=refs.map(objectBounds);
+  let boxes=refs.map(objectBounds);const view=currentView();
+  if(isReadOnlySurface(view.left)){const dx=Math.max(0,100-Math.min(...boxes.map(b=>b.x-b.halfX)));refs.forEach(r=>r.sticker.x+=dx);}
+  if(isReadOnlySurface(view.right)){const dx=Math.max(0,Math.max(...boxes.map(b=>b.x+b.halfX))-100);refs.forEach(r=>r.sticker.x-=dx);}
+  boxes=refs.map(objectBounds);
   const side=boxes.every(b=>b.x+b.halfX<=100)?'left':boxes.every(b=>b.x-b.halfX>=100)?'right':null;
   const surface=side?currentView()[side]:null, spread=surface?null:M.getSpread(book,position,true);
   const collection=surface?surface.stickers:spread.stickers, offset=side==='right'?100:0;
